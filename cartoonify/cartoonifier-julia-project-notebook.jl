@@ -18,15 +18,20 @@ end
 begin
 	using Pkg
 	Pkg.activate(pwd())
-	# Pkg.add("Images")
-	# Pkg.add("Plots")
-	# Pkg.add("PlutoUI")
-	# Pkg.add("ImageBinarization")
+	Pkg.add("Images")
+	Pkg.add("Plots")
+	Pkg.add("PlutoUI")
+	Pkg.add("ImageBinarization")
+	Pkg.add("Noise")
+	Pkg.add("ImageView")
 
-	using Plots, Images, ImageBinarization
+	using Plots, Images, ImageBinarization, Noise, ImageView
 	using PlutoUI
 	using Statistics
 end
+
+# ╔═╡ b54937b2-31f1-4b92-a421-c56374eacb46
+using BenchmarkTools
 
 # ╔═╡ 6bb07ad8-8afd-45a4-be08-f5492aa77c46
 md"# converting an image to grayscale"
@@ -35,19 +40,81 @@ md"# converting an image to grayscale"
 md"# applying median blur to smoothen an image"
 
 # ╔═╡ 4adb8b78-23f8-4d9b-9c34-78be3c460c8e
-md"# retrieving the edges for cartoon effect by using thresholding technique"
+md"# Create edge mask by retrieving the edges for cartoon effect by using thresholding technique"
 
 # ╔═╡ 9cbec465-48b2-42ca-9540-e2621ce0d8f3
-md"# applying bilateral filter to remove noise and keep edge sharp as required"
+md"""
+# Reduce the color palette
+"""
 
-# ╔═╡ cdb20c28-e496-4013-9b30-5df057a12468
+# ╔═╡ 487121a4-39f2-4822-aad1-0d12048de1e1
+md"Applying bilateral filter to remove noise and keep edge sharpness as required. It would give a bit blurred and sharpness-reducing effect to the image."
 
+# ╔═╡ a3e9bfc6-ce4e-44db-8d0d-dd18c75c598b
+md"# Combine Edge Mask with the Colored Image"
 
-# ╔═╡ 50aff4f1-aebd-4af8-bf92-267c5fa07980
+# ╔═╡ fb0ec4ff-3431-4200-aba2-f2a08e53f90f
+md"# putting it all togather"
 
+# ╔═╡ d9ca0026-e679-4c2f-938a-e0aee525c7e9
+begin
+	function cartoonify(img; 
+				binarize_window_size=9, binarize_percentage=15,
+				quantization_lvl=8,
+				σ=1, sharpening_intensity=1)
+		img_mask = binarize(img, AdaptiveThreshold(window_size = binarize_window_size, percentage=binarize_percentage))
+		
+		img_color_noise = quantization(img, quantization_lvl)
+	
+		img_noise_blurred = imfilter(img_color_noise, Kernel.gaussian(σ))
+	
+		# sharpened = @. img_color_noise * (1 + sharpening_intensity) + img_noise_blurred * (-intensity)
+	
+		# map(zip(sharpened, img_binary)) do (pix, mask)
+		# 	mask == 1 ? pix : RGB(mask)
+		# end
+	
+		map(zip(img_color_noise, img_noise_blurred, img_mask)) do (noisy_pix, blurred_pix, mask)
+			mask == 1 ? 
+			(noisy_pix * (1 + sharpening_intensity) + blurred_pix*(-sharpening_intensity)) : 
+			RGB(mask)
+		end
+	end
+	# todo: reduce allocation
+	function cartoonify!(img; 
+				binarize_window_size=9, binarize_percentage=15,
+				quantization_lvl=8,
+				σ=1, sharpening_intensity=1,
+				binarize_buffer=Gray.(img), quantization_buffer=copy(img), imfilter_buffer=similar(img), output_buffer=similar(img))
+		img_mask = binarize!(binarize_buffer, AdaptiveThreshold(window_size = binarize_window_size, percentage=binarize_percentage))
+		
+		img_color_noise = quantization!(quantization_buffer, quantization_lvl)
+	
+		img_noise_blurred = imfilter!(imfilter_buffer, img_color_noise, Kernel.gaussian(σ))
+
+		map(zip(img_color_noise, img_noise_blurred, img_mask)) do (noisy_pix, blurred_pix, mask)
+		mask == 1 ? 
+			(noisy_pix * (1 + sharpening_intensity) + blurred_pix*(-sharpening_intensity)) : 
+			RGB(mask)
+		end
+	end
+end
+
+# ╔═╡ f64453e7-df80-40ad-9a71-f31dc0f6bdd4
+md"# benchmarking & improvements
+
+checking type consistancy"
 
 # ╔═╡ b742cd3d-88f1-4740-8c29-6c29c5aacef9
 
+
+# ╔═╡ 999f487e-5d6f-4fe9-be87-12f82829f8a9
+md"""
+resources:
+
+[TDS: Turn Photos into Cartoons Using Python](https://towardsdatascience.com/turn-photos-into-cartoons-using-python-bb1a9f578a7e)\
+[dataflair: Cartoonify an Image with OpenCV in Python](https://data-flair.training/blogs/cartoonify-image-opencv-python/)
+"""
 
 # ╔═╡ 59402321-3b5f-4dbb-9cb4-888a6ee19bda
 function process_raw_camera_data(raw_camera_data)
@@ -299,33 +366,44 @@ gray_img = Gray.(img)
 # ╔═╡ 40e5201a-71b9-45aa-8d0b-d4a2330c968a
 smooth_gray_scale = mapwindow(median, gray_img, (5, 5))
 
-# ╔═╡ ad153aef-42e0-4ed7-a81b-30f697007b0d
-begin
-	hsv_img = HSV.(smooth_gray_scale)
-	channels = channelview(float.(hsv_img))
-	hue_img = channels[1,:,:]
-	value_img = channels[3,:,:]
-	saturation_img = channels[2,:,:]
-	nothing
-end
-
-# ╔═╡ 459fa2ae-2a98-4a9c-8435-063270d1a7aa
-begin
-	mask = zeros(size(hue_img))
-	h, s, v = 80, 150, 100
-	for ind in eachindex(hue_img)
-	    if hue_img[ind] <= h && saturation_img[ind] <= s/255 && value_img[ind] <= v/255
-	        mask[ind] = 1
-	    end
-	end
-	binary_img = colorview(Gray, mask)
-end
-
 # ╔═╡ 37fe2990-35ba-4b17-beae-235b141109b0
-imgb = binarize(img, AdaptiveThreshold(window_size = 9, percentage=10))
+img_binary = binarize(img, AdaptiveThreshold(window_size = 9, percentage=10))
 
-# ╔═╡ 8a35e6e1-c166-4cde-aa95-d0db94512879
+# ╔═╡ cdb20c28-e496-4013-9b30-5df057a12468
+img_color_noise = quantization(img, 8)
 
+# ╔═╡ 43d88b04-483e-4b55-b6be-72f23cb9f26e
+begin
+	gaussian_smoothing = 1
+	intensity = 1
+	img_noise_blurred = imfilter(img_color_noise, Kernel.gaussian(gaussian_smoothing))
+end
+
+# ╔═╡ af518249-d14a-4a25-9e5b-cdfd0c6fbcc8
+sharpened = @. img_color_noise * (1 + intensity) + img_noise_blurred * (-intensity)
+
+# ╔═╡ 266bbfbb-7244-4f14-a1cd-e63a4918247d
+cartoon = map(zip(sharpened, img_binary)) do (pix, mask)
+	mask == 1 ? pix : RGB(mask)
+end
+
+# ╔═╡ 50aff4f1-aebd-4af8-bf92-267c5fa07980
+cartoonify(img)
+
+# ╔═╡ e86876af-5b41-4da5-a453-f5eb5cb01d75
+cartoonify!(img; binarize_buffer=Gray.(img), quantization_buffer=copy(img), imfilter_buffer=similar(img), output_buffer=similar(img))
+
+# ╔═╡ f6d2df3e-07ec-4a82-a63a-2a8c774c4a25
+with_terminal() do
+	@code_warntype cartoonify(img)
+	@code_warntype cartoonify!(img; binarize_buffer=Gray.(img), quantization_buffer=copy(img), imfilter_buffer=similar(img), output_buffer=similar(img))
+end
+
+# ╔═╡ 268fe4e7-74d8-4e4f-a079-02378669d0a3
+@benchmark cartoonify($img)
+
+# ╔═╡ 44d2d5bd-817e-4aa7-924b-22a55546093e
+@benchmark cartoonify!($img; binarize_buffer=$(Gray.(img)), quantization_buffer=$(copy(img)), imfilter_buffer=$(similar(img)), output_buffer=$(similar(img)))
 
 # ╔═╡ Cell order:
 # ╠═aa737c92-e1a1-11ec-343e-116d4ead64c3
@@ -334,15 +412,26 @@ imgb = binarize(img, AdaptiveThreshold(window_size = 9, percentage=10))
 # ╠═70ef3422-b0bf-4746-a2ec-05d913c7a2b1
 # ╟─76abfe87-1fd7-4429-82c6-f5b2695b84b6
 # ╠═40e5201a-71b9-45aa-8d0b-d4a2330c968a
-# ╟─4adb8b78-23f8-4d9b-9c34-78be3c460c8e
-# ╠═ad153aef-42e0-4ed7-a81b-30f697007b0d
-# ╠═459fa2ae-2a98-4a9c-8435-063270d1a7aa
+# ╠═4adb8b78-23f8-4d9b-9c34-78be3c460c8e
 # ╠═37fe2990-35ba-4b17-beae-235b141109b0
 # ╟─9cbec465-48b2-42ca-9540-e2621ce0d8f3
 # ╠═cdb20c28-e496-4013-9b30-5df057a12468
+# ╟─487121a4-39f2-4822-aad1-0d12048de1e1
+# ╠═43d88b04-483e-4b55-b6be-72f23cb9f26e
+# ╠═af518249-d14a-4a25-9e5b-cdfd0c6fbcc8
+# ╟─a3e9bfc6-ce4e-44db-8d0d-dd18c75c598b
+# ╠═266bbfbb-7244-4f14-a1cd-e63a4918247d
+# ╟─fb0ec4ff-3431-4200-aba2-f2a08e53f90f
+# ╠═d9ca0026-e679-4c2f-938a-e0aee525c7e9
 # ╠═50aff4f1-aebd-4af8-bf92-267c5fa07980
+# ╠═e86876af-5b41-4da5-a453-f5eb5cb01d75
+# ╟─f64453e7-df80-40ad-9a71-f31dc0f6bdd4
+# ╠═f6d2df3e-07ec-4a82-a63a-2a8c774c4a25
+# ╠═b54937b2-31f1-4b92-a421-c56374eacb46
+# ╠═268fe4e7-74d8-4e4f-a079-02378669d0a3
+# ╠═44d2d5bd-817e-4aa7-924b-22a55546093e
 # ╠═b742cd3d-88f1-4740-8c29-6c29c5aacef9
+# ╟─999f487e-5d6f-4fe9-be87-12f82829f8a9
 # ╟─59402321-3b5f-4dbb-9cb4-888a6ee19bda
 # ╟─7c8d245b-67b8-4968-bcdc-44119487d293
 # ╠═c15d5f71-2c67-45b5-b9d3-9d93b8934ca7
-# ╠═8a35e6e1-c166-4cde-aa95-d0db94512879
