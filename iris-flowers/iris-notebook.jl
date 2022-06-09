@@ -1,6 +1,8 @@
 ### A Pluto.jl notebook ###
 # v0.19.5
 
+#> [frontmatter]
+
 using Markdown
 using InteractiveUtils
 
@@ -15,16 +17,16 @@ begin
 	# Pkg.add("MLJ")
 	# Pkg.add("StatsPlots")
 	# Pkg.add("KernelDensity")
-	# # Pkg.add("GLMakie")
-	# # Pkg.rm("GLMakie")
+	# Pkg.add("WGLMakie")
+	# # Pkg.rm("WGLMakie")
 	# Pkg.add("StableRNGs")
 	# Pkg.add(name="Lighthouse", version="0.14")
 	# Pkg.add("PlutoUI")
-	# # Pkg.update()
+	# Pkg.update()
 	
 	using Plots, StatsPlots, PlutoUI
 	using KernelDensity
-	# using GLMakie
+	using WGLMakie
 	using DataFrames, CSV
 	using Statistics, StatsBase, StableRNGs
 	using Pipe
@@ -78,21 +80,23 @@ md"# EDA"
 begin
 	features = names(train)[1:end-1]
 	n = length(features)
-	ps = fill(plot(), n, n)
+	ps = fill(Plots.plot(), n, n)
 	
 	for i ∈ 1:n, j ∈ 1:n
 		x, y = train[!, features[i]], train[!, features[j]]
 		species = train[!, :species]
 		ps[i, j] = if j < i
 			dens = KernelDensity.kde((x, y))
-			plot(dens)
+			Plots.plot(dens)
 		elseif j > i
-			plot(x, y, seriestype=:scatter, group=species)
+			Plots.plot(x, y, seriestype=:scatter, group=species)
 		else
-			plot(x, y, seriestype=:density, group=species)
+			Plots.plot(x, y, seriestype=:density, group=species)
 		end
+		i == 1 && Plots.ylabel!(ps[i, j], features[j])
+		j == n && Plots.xlabel!(ps[i, j], features[i])
 	end
-	plot(ps..., layout = (n, n), size=(1000,1000))
+	Plots.plot(ps..., layout = (n, n), size=(1000,1000))
 end
 
 # ╔═╡ faed050a-c26a-4083-8822-ea6763e17645
@@ -193,13 +197,15 @@ Accuracy()(ŷ, y_test)
 
 # ╔═╡ 20cf436a-2982-4d3a-a0e0-337daa95bc4b
 begin
-	cnf_mat = ConfusionMatrix()(ŷ, y_test).mat
-	Lighthouse.plot_confusion_matrix(cnf_mat, unique(y_test), :Row)
-	# Lighthouse.plot_confusion_matrix(rand(2, 2), ["1", "2"], :Row, annotation_text_size=34)
+	cnf_mat = ConfusionMatrix()(ŷ, y_test)
+	Lighthouse.plot_confusion_matrix(cnf_mat.mat, cnf_mat.labels, :Row)
 end
 
 # ╔═╡ c87746cf-1f76-488f-b350-123b59642bb4
 md"todo: classification report"
+
+# ╔═╡ cc618da9-71a6-4e59-b49a-967834368925
+WGLMakie.activate!()
 
 # ╔═╡ Cell order:
 # ╠═aa737c92-e1a1-11ec-343e-116d4ead64c3
@@ -239,4 +245,5 @@ md"todo: classification report"
 # ╠═bf4bc29e-3804-427e-8d68-b7bc6d3b5b0b
 # ╠═20cf436a-2982-4d3a-a0e0-337daa95bc4b
 # ╟─c87746cf-1f76-488f-b350-123b59642bb4
+# ╠═cc618da9-71a6-4e59-b49a-967834368925
 # ╠═c15d5f71-2c67-45b5-b9d3-9d93b8934ca7
