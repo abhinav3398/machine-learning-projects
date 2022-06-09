@@ -14,14 +14,16 @@ begin
 	# Pkg.add("MLDataUtils")
 	# Pkg.add("MLJ")
 	# Pkg.add("StatsPlots")
+	# Pkg.add("KernelDensity")
 	# # Pkg.add("GLMakie")
 	# # Pkg.rm("GLMakie")
 	# Pkg.add("StableRNGs")
-	# Pkg.add("Lighthouse")
+	# Pkg.add(name="Lighthouse", version="0.14")
 	# Pkg.add("PlutoUI")
 	# # Pkg.update()
 	
 	using Plots, StatsPlots, PlutoUI
+	using KernelDensity
 	# using GLMakie
 	using DataFrames, CSV
 	using Statistics, StatsBase, StableRNGs
@@ -66,11 +68,42 @@ let
 	bar(species_dist)
 end
 
+# ╔═╡ 4b6c1306-63bb-42df-9e57-13ebec4f42cd
+md"population is normally distributed: no target imbalance"
+
 # ╔═╡ 4949e3ac-2432-4bcd-aeee-bcd29dea23dc
 md"# EDA"
 
-# ╔═╡ 4654be50-aa6a-4552-b71b-eb4567d57628
-md"TODO: Pair plot with Scatterplots and Density plot"
+# ╔═╡ 6097ca7d-97b3-4691-9a47-a66f6105a732
+begin
+	features = names(train)[1:end-1]
+	n = length(features)
+	ps = fill(plot(), n, n)
+	
+	for i ∈ 1:n, j ∈ 1:n
+		x, y = train[!, features[i]], train[!, features[j]]
+		species = train[!, :species]
+		ps[i, j] = if j < i
+			dens = KernelDensity.kde((x, y))
+			plot(dens)
+		elseif j > i
+			plot(x, y, seriestype=:scatter, group=species)
+		else
+			plot(x, y, seriestype=:density, group=species)
+		end
+	end
+	plot(ps..., layout = (n, n), size=(1000,1000))
+end
+
+# ╔═╡ faed050a-c26a-4083-8822-ea6763e17645
+md"""
+we find that:
+* can't see any significant outliers that would skew the distributions
+* Because Patel length and Petal width have saperable distributions for different iris species, these 2 variables would have higher influence over classifying the species.
+* We can also observe from the scatterplots of petal_length x petal_width, petal_width x sepal_width and petal_width x sepal_length, that the species clusters are clearly distinguishable and can easily be saperated a line.
+* Hence, a sinple linear model(s) would be best suited for this type of classification here, without requiring of any feature transformations as the features are already distinguishable.
+* The setosa species is the most easily distinguishable because of its small feature size.
+"""
 
 # ╔═╡ 5db70ee8-a94c-4acc-80dc-9ba28521ae70
 function plot_heatmap(mat; xlabel)
@@ -131,12 +164,6 @@ md"## Model Tuning"
 ranges = [range(pipe, :(logistic_classifier.lambda), lower=0.0, upper=1.0, scale=:log),
 		range(pipe, :(logistic_classifier.gamma), lower=0.0, upper=1.0, scale=:log),
 		range(pipe, :(logistic_classifier.penalty), values=[:l2, :l1, :en, :none]),
-		# range(pipe, :(logistic_classifier.solver), values=[MLJLinearModels.Analytical(),
-		# 															MLJLinearModels.IWLSCG(),
-		# 															MLJLinearModels.LBFGS(),
-		# 															MLJLinearModels.Newton(),
-		# 															MLJLinearModels.NewtonCG(),
-		# 															MLJLinearModels.ProxGrad()]),
 ]
 
 # ╔═╡ c4e17f84-afba-4650-92f4-c0631d9d0ba7
@@ -185,8 +212,10 @@ md"todo: classification report"
 # ╠═b97d95df-31ee-4ad3-9748-2bf2f65f909f
 # ╟─0f4887cc-7e82-4db1-9f87-b4da7fe7a03f
 # ╠═dddf10c3-b8de-48fa-be8d-8c155b7f94b7
-# ╠═4949e3ac-2432-4bcd-aeee-bcd29dea23dc
-# ╠═4654be50-aa6a-4552-b71b-eb4567d57628
+# ╟─4b6c1306-63bb-42df-9e57-13ebec4f42cd
+# ╟─4949e3ac-2432-4bcd-aeee-bcd29dea23dc
+# ╠═6097ca7d-97b3-4691-9a47-a66f6105a732
+# ╟─faed050a-c26a-4083-8822-ea6763e17645
 # ╟─5db70ee8-a94c-4acc-80dc-9ba28521ae70
 # ╠═f37d36a8-e96d-4f82-a3f1-f8b9180af37d
 # ╟─a68185e2-1de0-4714-b198-0b2a503e0bec
@@ -200,7 +229,7 @@ md"todo: classification report"
 # ╠═73237751-34a1-4035-b2c6-79682ba684ac
 # ╟─d9188017-22f6-4aad-be40-5c10273070ea
 # ╠═b5fc3433-019c-401b-aedb-56fa07c6c6a5
-# ╠═c4e17f84-afba-4650-92f4-c0631d9d0ba7
+# ╟─c4e17f84-afba-4650-92f4-c0631d9d0ba7
 # ╠═cafeae07-6097-41db-934e-7c70a30e68c3
 # ╠═c838ab8c-f684-47df-b121-7bcd4c707f0e
 # ╠═c55b0c7e-3960-4fdf-a193-dc2852ec7f23
