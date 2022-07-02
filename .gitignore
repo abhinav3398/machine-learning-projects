@@ -3,3 +3,8 @@
 */env
 .toml
 *env/
+*/data/*
+iris-flowers
+data/
+saved_models/
+*.pt
